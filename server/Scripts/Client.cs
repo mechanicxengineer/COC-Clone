@@ -13,14 +13,6 @@ namespace DevelopersHub.RealtimeNetworking.Server
         public UDP udp;
         public string sendToken = "xxxxx";
         public string receiveToken = "xxxxx";
-        public long accountID = -1;
-        public bool disconnecting = false;
-        public string ipAddress = "000.0.0.000";
-        public Data.Room room = null;
-        public Data.Player player = null;
-        public Data.Party party = null;
-        public Data.Game game = null;
-        public DateTime lastTick = DateTime.Now;
 
         public Client(int _clientId)
         {
@@ -72,7 +64,7 @@ namespace DevelopersHub.RealtimeNetworking.Server
                 }
                 catch (Exception ex)
                 {
-                    Tools.LogError(ex.Message, ex.StackTrace);
+                    Console.WriteLine("Error sending data to client id {0} via TCP: {1}", id, ex.Message);
                 }
             }
 
@@ -93,7 +85,7 @@ namespace DevelopersHub.RealtimeNetworking.Server
                 }
                 catch (Exception ex)
                 {
-                    Tools.LogError(ex.Message, ex.StackTrace);
+                    Console.WriteLine("Error receiving TCP data: {0}", ex.Message);
                     Server.clients[id].Disconnect();
                 }
             }
@@ -115,17 +107,10 @@ namespace DevelopersHub.RealtimeNetworking.Server
                     byte[] _packetBytes = receivedData.ReadBytes(length);
                     Threading.ExecuteOnMainThread(() =>
                     {
-                        try
+                        using (Packet _packet = new Packet(_packetBytes))
                         {
-                            using (Packet _packet = new Packet(_packetBytes))
-                            {
-                                int _packetId = _packet.ReadInt();
-                                Server.packetHandlers[_packetId](id, _packet);
-                            }
-                        }
-                        catch (Exception ex)
-                        {
-                            Tools.LogError(ex.Message, ex.StackTrace);
+                            int _packetId = _packet.ReadInt();
+                            Server.packetHandlers[_packetId](id, _packet);
                         }
                     });
                     length = 0;
@@ -181,17 +166,10 @@ namespace DevelopersHub.RealtimeNetworking.Server
                 byte[] _packetBytes = _packetData.ReadBytes(_packetLength);
                 Threading.ExecuteOnMainThread(() =>
                 {
-                    try
+                    using (Packet _packet = new Packet(_packetBytes))
                     {
-                        using (Packet _packet = new Packet(_packetBytes))
-                        {
-                            int _packetId = _packet.ReadInt();
-                            Server.packetHandlers[_packetId](id, _packet);
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        Tools.LogError(ex.Message, ex.StackTrace);
+                        int _packetId = _packet.ReadInt();
+                        Server.packetHandlers[_packetId](id, _packet);
                     }
                 });
             }
@@ -204,30 +182,11 @@ namespace DevelopersHub.RealtimeNetworking.Server
 
         private void Disconnect()
         {
-            if (tcp.socket != null)
-            {
-                Console.WriteLine("Client with IP {0} has been disconnected.", tcp.socket.Client.RemoteEndPoint);
-                IPEndPoint ip = tcp.socket.Client.RemoteEndPoint as IPEndPoint;
-                Terminal.ClientDisconnected(id, ip.Address.ToString());
-                if (Manager.enabled)
-                {
-                    Manager.OnClientDisconnected(id, ip.Address.ToString());
-                }
-                tcp.Disconnect();
-            }
-            else
-            {
-                Console.WriteLine("Client with unkown IP has been disconnected.");
-                Terminal.ClientDisconnected(id, "unknown");
-                if (Manager.enabled)
-                {
-                    Manager.OnClientDisconnected(id, "unknown");
-                }
-            }
-            if (udp.endPoint != null)
-            {
-                udp.Disconnect();
-            }
+            Console.WriteLine("{0} has been disconnected.", tcp.socket.Client.RemoteEndPoint);
+            IPEndPoint ip = tcp.socket.Client.RemoteEndPoint as IPEndPoint;
+            Terminal.OnClientDisconnected(id, ip.Address.ToString());
+            tcp.Disconnect();
+            udp.Disconnect();
         }
 
     }

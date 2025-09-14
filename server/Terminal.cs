@@ -1,121 +1,117 @@
 ﻿using System;
+using System.Numerics;
 
 namespace DevelopersHub.RealtimeNetworking.Server
 {
     class Terminal
     {
 
-        public const int port = 5555;
-        public const int updates_per_second = 30;
-        public const int max_players = 100000;
-        public const string sqlite_database_file_path = @"C:\Database\realtime_networking.db";
-        public const string log_directory_path = @"C:\Log\realtime_networking\";
-
-        #region Extensions
-        public const string netcode_server_executable_path = @"C:\Users\Test\Desktop\Server\Netcode.exe";
-        public const int netcode_max_server_life_seconds = 21600;
-        #endregion
-
-        public static void Start()
-        {
-            Console.WriteLine("Server Started.");
-        }
-
+        #region Update
+        public const int updatesPerSecond = 30;
         public static void Update()
         {
+            
+        }
+        #endregion
 
+        #region Connection
+        public const int maxPlayers = 100000;
+        public const int port = 5555;
+        public static void OnClientConnected(int id, string ip)
+        {
+            
         }
 
-        public static void ClientConnected(int id, string ip)
+        public static void OnClientDisconnected(int id, string ip)
         {
+            
+        }
+        #endregion
 
+        #region Data
+        public static void ReceivedPacket(int clientID, Packet packet)
+        {
+            // For test, remove it ->
+            //int integerValue = packet.ReadInt();
+            //string stringValue = packet.ReadString();
+            //float floatValue = packet.ReadFloat();
+            //Quaternion quaternionValue = packet.ReadQuaternion();
+            //bool boolValue = packet.ReadBool();
+            //Console.WriteLine("Int:{0} String:{1}, Float:{2}, Quaternion:{3}, Bool:{4}.", integerValue, stringValue, floatValue, quaternionValue, boolValue);
+            // <-
         }
 
-        public static void ClientDisconnected(int id, string ip)
+        public static void ReceivedBytes(int clientID, int packetID, byte[] data)
         {
-
+            
         }
 
-        public static void PacketReceived(int clientID, Packet packet)
+        public static void ReceivedString(int clientID, int packetID, string data)
         {
+            // For test, remove it ->
+            //if(packetID == 123)
+            //{
+            //    Console.WriteLine(data);
 
-        }
+            //    Packet packet = new Packet();
+            //    packet.Write(555);
+            //    packet.Write(DateTime.Now.ToString());
+            //    Sender.TCP_Send(clientID, packet);
+            //}
+            // <-
 
-        public static void OnAuthenticated(long accountID, bool wasSignedUp, Microsoft.Data.Sqlite.SqliteConnection connection)
-        {
-
-        }
-
-        public static (Data.PurchaseResult, int) OverridePurchase(long accountID, int itemCategory, int itemID, int itemLevel, int currencyID, Microsoft.Data.Sqlite.SqliteConnection connection)
-        {
-            uint price = 99999;
-            Data.PurchaseResult result = Data.PurchaseResult.Unknown;
-
-            /*
-            bool purchased = false;
-            if (itemCategory == weapon && itemID == excalibur && itemLevel == 1)
+            switch (packetID)
             {
-                if(currencyID == coins)
-                {
-                    price = 12345;
-                    purchased = Manager.SpendCoins(accountID, price);
-                }
+                case 1: Database.AuthenticatePlayer(clientID, data);
+                    break;
             }
-            if(purchased)
-            {
-                // Add item here. For example:
-                Data.RuntimeEquipment sword = new Data.RuntimeEquipment();
-                sword.name = "Excalibur";
-                sword.tag = "excalibur";
-                sword.prefabID = 0;
-                sword.weight = 4.8;
-                sword.damage = 25;
-                sword.level = itemLevel;
-                Manager.CreateEquipment(accountID, 0, sword);
-            }
-            else
-            {
-                result = Data.PurchaseResult.InsufficientFunds;
-            }
-            */
-
-            return (result, (int)price);
         }
 
-        public static (int, int) OverrideMatchmaking(int gameID, int mapID)
+        public static void ReceivedInteger(int clientID, int packetID, int data)
         {
-            int teamsPerMatch = 2;
-            int playersPerTeam = 6;
-            // --->
-            // Add your custom game conditions here, for example:
-            if (gameID == 1)
-            {
-                teamsPerMatch = 10;
-                playersPerTeam = 10;
-            }
-            else if (gameID == 2)
-            {
-                teamsPerMatch = 2;
-                playersPerTeam = 100;
-            }
-            // <---
-            return (teamsPerMatch, playersPerTeam);
+            
         }
 
-        public static void OverrideGameInitialData(ref Data.RuntimeGame data, Microsoft.Data.Sqlite.SqliteConnection connection)
+        public static void ReceivedFloat(int clientID, int packetID, float data)
         {
 
         }
 
-        public static void OnGameFinished(Data.Game game)
+        public static void ReceivedBoolean(int clientID, int packetID, bool data)
         {
 
         }
 
-        public static void OnNetcodeGameResultReceived(Data.RuntimeResult result)
+        public static void ReceivedVector3(int clientID, int packetID, Vector3 data)
         {
 
         }
+
+        public static void ReceivedQuaternion(int clientID, int packetID, Quaternion data)
+        {
+
+        }
+
+        public static void ReceivedLong(int clientID, int packetID, long data)
+        {
+
+        }
+
+        public static void ReceivedShort(int clientID, int packetID, short data)
+        {
+
+        }
+
+        public static void ReceivedByte(int clientID, int packetID, byte data)
+        {
+
+        }
+
+        public static void ReceivedEvent(int clientID, int packetID)
+        {
+
+        }
+        #endregion
 
     }
 }
