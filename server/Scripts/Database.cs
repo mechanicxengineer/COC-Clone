@@ -1,6 +1,8 @@
-﻿using System;
-using MySql.Data.MySqlClient;
+﻿using MySql.Data.MySqlClient;
+using MySqlX.XDevAPI;
+using System;
 using System.Data;
+using System.Threading.Tasks;
 
 namespace DevelopersHub.RealtimeNetworking.Server
 {
@@ -77,45 +79,82 @@ namespace DevelopersHub.RealtimeNetworking.Server
             }
         }
 
-        public static void AuthenticatePlayer(int id, string device)
+        public async static void AuthenticatePlayer(int id, string device)
         {
-            Console.WriteLine(device);
-            string query = String.Format("SELECT id FROM accounts WHERE device_id = '{0}';", device);
-            bool found = false;
-            using (MySqlCommand command = new MySqlCommand(query, mysqlConnection))
+            long account_id = await AuthenticatePlayerAsync(id, device);
+            Sender.TCP_Send(id, 1, account_id);
+        }
+
+        private async static Task<long> AuthenticatePlayerAsync(int id, string device)
+        {
+            Task<long> task = Task.Run(() =>
             {
-                using (MySqlDataReader reader = command.ExecuteReader())
+                long account_id = 0;
+                string query = String.Format("SELECT id FROM accounts WHERE device_id = '{0}';", device);
+                bool found = false;
+                using (MySqlCommand command = new MySqlCommand(query, mysqlConnection))
                 {
-                    if (reader.HasRows)
+                    using (MySqlDataReader reader = command.ExecuteReader())
                     {
-                        while (reader.Read())
+                        if (reader.HasRows)
                         {
-                            long account_id = long.Parse(reader["id"].ToString());
-                            AuthenticationResponse(id, account_id);
-                            found = true;
+                            while (reader.Read())
+                            {
+                                account_id = long.Parse(reader["id"].ToString());
+                                found = true;
+                            }
                         }
                     }
                 }
-            }
-            if (found == false)
-            {
-                query = String.Format("INSERT INTO accounts (device_id) VALUES('{0}');", device);
-                using (MySqlCommand command = new MySqlCommand(query, mysqlConnection))
+                if (found == false)
                 {
-                    command.ExecuteNonQuery();
-                    long account_id = command.LastInsertedId;
-                    AuthenticationResponse(id, account_id);
+                    query = String.Format("INSERT INTO accounts (device_id) VALUES('{0}');", device);
+                    using (MySqlCommand command = new MySqlCommand(query, mysqlConnection))
+                    {
+                        command.ExecuteNonQuery();
+                        account_id = command.LastInsertedId;
+                    }
                 }
-            }
+                return account_id;
+            });
+           return await task;
         }
 
-        private static void AuthenticationResponse(int clientID, long accountID)
+        public async static void SyncPlayerData(int id, string device)
         {
-            Sender.TCP_Send(clientID, 1, accountID);
+            Data.Player player = await SyncPlayerDataAsync(id, device);
+            string data =Data.Serialize<Data.Player>(player);
+            Sender.TCP_Send(id, 2, data);
+        }
+
+        private async static Task<Data.Player> SyncPlayerDataAsync(int id, string device)
+        {
+            Task<Data.Player> task = Task.Run(() =>
+            {
+                Data.Player data = new Data.Player();
+                string query = String.Format("SELECT id, gold, elixir, gems FROM accounts WHERE device_id = '{0}';", device);
+                using (MySqlCommand command = new MySqlCommand(query, mysqlConnection))
+                {
+                    using (MySqlDataReader reader = command.ExecuteReader())
+                    {
+                        if (reader.HasRows)
+                        {
+                            while (reader.Read())
+                            {
+                                //data.id = long.Parse(reader["id"].ToString());
+                                data.gold = int.Parse(reader["gold"].ToString());
+                                data.elixir = int.Parse(reader["elixir"].ToString());
+                                data.gems = int.Parse(reader["gems"].ToString());
+                            }
+                        }
+                    }
+                }
+                return data;
+            });
+            return await task;
         }
 
         #endregion
-
 
     }
 }

@@ -5,7 +5,9 @@ public class CameraController : MonoBehaviour
     [SerializeField] private Camera _camera = null;
     [SerializeField] private float _moveSpeed = 50;
     [SerializeField] private float _moveSmooth = 5;
-    private float _zoomSpeed = 5f;
+
+    [SerializeField] private float _zoomSpeed = 5f;
+    [SerializeField] private float _zoomSmooth = 5;
 
     private Controls _inputs = null;
     private bool _moving = false;
@@ -18,6 +20,12 @@ public class CameraController : MonoBehaviour
     private float _down = 10;
     private float _angle = 45;
     private float _zoom = 5;
+    private float _zoomMax = 10;
+    private float _zoomMin = 1;
+    private Vector2 _zoomPositionOnScreen = Vector2.zero;
+    private Vector3 _zoomPositionInWorld = Vector3.zero;
+    private float _zoomBaseValue = 0;
+    private float _zoomBaseDistance = 0;
 
     private Transform _root = null;
     private Transform _pivot = null;
@@ -35,10 +43,10 @@ public class CameraController : MonoBehaviour
 
     private void Start()
     {
-        Initialize(Vector3.zero, 10, 10, 10, 10, 45);
+        Initialize(Vector3.zero, 40, 40, 40, 40, 45, 10, 5, 20);
     }
 
-    public void Initialize(Vector3 center, float right, float left, float up, float down, float angle)
+    public void Initialize(Vector3 center, float right, float left, float up, float down, float angle, float zoom, float zoomMin, float zoomMax)
     {
         _center = center;
         _right = right;
@@ -46,7 +54,12 @@ public class CameraController : MonoBehaviour
         _up = up;
         _down = down;
         _angle = angle;
+        _zoom = zoom;
+        _zoomMin = zoomMin;
+        _zoomMax = zoomMax;
 
+        _camera.orthographicSize = _zoom;
+        _zooming = false;
         _moving = false;
         _pivot.SetParent(_root);
         _target.SetParent(_pivot);
@@ -57,7 +70,7 @@ public class CameraController : MonoBehaviour
         _pivot.localPosition = Vector3.zero;
         _pivot.localEulerAngles = new Vector3(_angle, 0, 0);
 
-        _target.localPosition = new Vector3(0, 0, -10);
+        _target.localPosition = new Vector3(0, 0, -100);
         _target.localEulerAngles = Vector3.zero;
     }
 
@@ -66,13 +79,18 @@ public class CameraController : MonoBehaviour
         _inputs.Enable();
         _inputs.Main.Move.started += _ => MoveStarted();
         _inputs.Main.Move.canceled += _ => MoveCanceled();
+        _inputs.Main.TouchZoom.started += _ => ZoomStarted();
+        _inputs.Main.TouchZoom.canceled += _ => ZoomCanceled();
     }
 
     private void OnDisable()
     {
+        _inputs.Main.Move.started -= _ => MoveStarted();
+        _inputs.Main.Move.canceled -= _ => MoveCanceled();
+        _inputs.Main.TouchZoom.started -= _ => ZoomStarted();
+        _inputs.Main.TouchZoom.canceled -= _ => ZoomCanceled();
         _inputs.Disable();
     }
-
     private void MoveStarted()
     {
         _moving = true;
@@ -83,14 +101,63 @@ public class CameraController : MonoBehaviour
         _moving = false;
     }
 
+    private void ZoomStarted()
+    {
+        Vector2 touch0 = _inputs.Main.TouchPosition0.ReadValue<Vector2>();
+        Vector2 touch1 = _inputs.Main.TouchPosition1.ReadValue<Vector2>();
+        _zoomPositionOnScreen = Vector2.Lerp(touch0, touch1, 0.5f);
+        _zoomPositionInWorld = CameraScreenPositionToPlanePosition(_zoomPositionOnScreen);
+        _zoomBaseValue = _zoom;
+
+        touch0.x /= Screen.width;
+        touch1.x /= Screen.width;
+
+        touch0.y /= Screen.height;
+        touch1.y /= Screen.height;
+
+        _zoomBaseDistance = Vector2.Distance(touch0, touch1);
+        _zooming = true;
+    }
+
+    private void ZoomCanceled()
+    {
+        _zooming = false;
+    }
+
+
     private void Update()
     {
         if (Input.touchSupported == false)
         {
-
+            float mouseScroll = _inputs.Main.MouseScroll.ReadValue<float>();
+            if (mouseScroll > 0)
+            {
+                _zoom -= 3f * Time.deltaTime;
+            }
+            else if (mouseScroll < 0)
+            {
+                _zoom += 3f * Time.deltaTime;
+            }
         }
 
-        if (_moving)
+        if (_zooming)
+        {
+            Vector2 touch0 = _inputs.Main.TouchPosition0.ReadValue<Vector2>();
+            Vector2 touch1 = _inputs.Main.TouchPosition1.ReadValue<Vector2>();
+
+            touch0.x /= Screen.width;
+            touch1.x /= Screen.width;
+            touch0.y /= Screen.height;
+            touch1.y /= Screen.height;
+
+            float currentDistance = Vector2.Distance(touch0, touch1);
+            float deltaDistance = currentDistance - _zoomBaseDistance;
+            _zoom = _zoomBaseDistance - (deltaDistance * _zoomSpeed);
+
+            Vector3 zoomCenter = CameraScreenPositionToPlanePosition(_zoomPositionOnScreen);
+            _root.position += (_zoomPositionInWorld - zoomCenter);
+        }
+        else if (_moving)
         {
             Vector2 move = _inputs.Main.MoveDelta.ReadValue<Vector2>();
             if (move != Vector2.zero)
@@ -100,6 +167,12 @@ public class CameraController : MonoBehaviour
                 _root.position -= _root.right.normalized * move.x * _moveSpeed;
                 _root.position -= _root.forward.normalized * move.y * _moveSpeed;
             }
+        }
+        AdjustBounds();
+
+        if (_camera.orthographicSize != _zoom)
+        {
+            _camera.orthographicSize = Mathf.Lerp(_camera.orthographicSize, _zoom, _zoomSmooth * Time.deltaTime);
         }
 
         if (_camera.transform.position != _target.position)
@@ -111,4 +184,75 @@ public class CameraController : MonoBehaviour
             _camera.transform.rotation = _target.rotation;
         }
     }
+
+    private void AdjustBounds()
+    {
+        if (_zoom < _zoomMin) { _zoom = _zoomMin; }
+        if (_zoom > _zoomMax) { _zoom = _zoomMax; }
+
+        float h = PlaneOrthographicSize();
+        float w = h * _camera.aspect;
+
+        if (h > (_up + _down) / 2f)
+        { 
+            float n = (_up + _down) / 2f;
+            _zoom = n * Mathf.Sin(_angle * Mathf.Deg2Rad);
+        }
+        if (w > (_right + _left) / 2f)
+        { 
+            float n = (_right + _left) / 2f;
+            _zoom = n * Mathf.Sin(_angle * Mathf.Deg2Rad) / _camera.aspect;
+        }
+
+        h = PlaneOrthographicSize();
+        w = h * _camera.aspect;
+
+        Vector3 tr = _root.position + _root.right.normalized * w + _root.forward.normalized * h;
+        Vector3 tl = _root.position - _root.right.normalized * w + _root.forward.normalized * h;
+        Vector3 dr = _root.position + _root.right.normalized * w - _root.forward.normalized * h;
+        Vector3 dl = _root.position - _root.right.normalized * w - _root.forward.normalized * h;
+
+        if (tr.x > _center.x + _right)
+        {
+            _root.position += Vector3.left * Mathf.Abs(tr.x - (_center.x + _right));
+        }
+        if (tl.x < _center.x - _left)
+        {
+            _root.position += Vector3.right * Mathf.Abs((_center.x - _left) - tl.x);
+        }
+
+        if (tr.z > _center.z + _up)
+        {
+            _root.position += Vector3.back * Mathf.Abs(tr.z - (_center.z + _up));
+        }
+        if (dl.z < _center.z - _down)
+        {
+            _root.position += Vector3.forward * Mathf.Abs((_center.z - _down) - dl.z);
+        }
+    }
+    
+    private float PlaneOrthographicSize()
+    {
+        float h = _zoom * 2f;
+        return h / Mathf.Sin(_angle *  Mathf.Deg2Rad) / 2f;
+    }
+
+    private Vector3 CameraScreenPositionToWorldPosition(Vector2 position)
+    {
+        float h = _camera.orthographicSize * 2f;
+        float w = _camera.aspect * h;
+
+        Vector3 ancher = _camera.transform.position - (_camera.transform.right.normalized * w / 2f) - (_camera.transform.up.normalized * h / 2f);
+        return ancher + (_camera.transform.right.normalized * position.x / Screen.width * w) 
+                      + (_camera.transform.up.normalized * position.y / Screen.height * h);
+    }
+
+    private Vector3 CameraScreenPositionToPlanePosition(Vector2 position)
+    {
+        Vector3 point = CameraScreenPositionToWorldPosition(position);
+        float h = point.y - _root.position.y;
+        float x = h / Mathf.Sin(_angle * Mathf.Deg2Rad);
+        return point + _camera.transform.forward.normalized * x;
+    }
+
 }

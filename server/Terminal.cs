@@ -64,6 +64,8 @@ namespace DevelopersHub.RealtimeNetworking.Server
             {
                 case 1: Database.AuthenticatePlayer(clientID, data);
                     break;
+                case 2: Database.SyncPlayerData(clientID, data); 
+                    break;
             }
         }
 

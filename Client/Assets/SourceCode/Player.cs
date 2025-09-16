@@ -7,20 +7,37 @@ public class Player : MonoBehaviour
 {
     public enum RequestID
     {
-        AUTH = 1
+        AUTH = 1,
+        SYNC = 2
     }
 
     private void Start()
     {
-        RealtimeNetworking.OnLongReceived += ReceiveLong;
+        RealtimeNetworking.OnLongReceived += ReceivedLong;
+        RealtimeNetworking.OnStringReceived += ReceivedString;
         ConnectToServer();
     }
 
-    private void ReceiveLong(int id, long value)
+    private void ReceivedLong(int id, long value)
     {
         switch (id)
         {
-            case 1: Debug.Log(value);
+            case 1: 
+                Debug.Log(value);
+                Sender.TCP_Send((int)RequestID.SYNC, SystemInfo.deviceUniqueIdentifier);
+                break;
+        }
+    }
+
+    private void ReceivedString(int id, string value)
+    {
+        switch (id)
+        {
+            case 2:
+                Data.Player player = Data.Desrialize<Data.Player>(value);
+                MainUI.instance._goldText.text = player.gold.ToString();
+                MainUI.instance._elixirText.text = player.elixir.ToString();
+                MainUI.instance._gemsText.text = player.gems.ToString();
                 break;
         }
     }
